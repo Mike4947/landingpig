@@ -48,6 +48,20 @@ On first launch, paste your Anthropic API key. Config is stored at `~/.config/la
 ./install.sh --prefix /path/to/landingpig
 ```
 
+## Uninstall
+
+**One command:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Mike4947/landingpig/main/uninstall.sh | bash
+```
+
+Removes the install directory and PATH entries. Your config at `~/.config/landingpig/` is kept unless you run:
+
+```bash
+LANDINGPIG_PURGE_CONFIG=1 curl -fsSL https://raw.githubusercontent.com/Mike4947/landingpig/main/uninstall.sh | bash
+```
+
 ## Commands
 
 | Command | Description |
