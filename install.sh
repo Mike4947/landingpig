@@ -17,7 +17,19 @@ set -euo pipefail
 VERSION="0.1.0"
 REPO_URL="https://github.com/Mike4947/landingpig.git"
 REQUIRED_KB=51200
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
+# When piped (curl | bash), BASH_SOURCE is unset and $0 is "bash" — leave empty so we clone.
+SCRIPT_DIR=""
+_script_ref="${BASH_SOURCE[0]:-}"
+if [[ -n "$_script_ref" && -f "$_script_ref" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "$_script_ref")" && pwd)"
+else
+  _script_ref="${0:-}"
+  if [[ -n "$_script_ref" && "$_script_ref" != bash && "$_script_ref" != sh && -f "$_script_ref" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "$_script_ref")" && pwd)"
+  fi
+fi
+unset _script_ref
 SOURCE_TMP=""
 OS=""
 INSTALL_ROOT=""
@@ -117,14 +129,15 @@ win_path() {
 }
 
 resolve_source_dir() {
-  if [[ -f "${SCRIPT_DIR}/Cargo.toml" ]]; then
+  if [[ -n "$SCRIPT_DIR" && -f "${SCRIPT_DIR}/Cargo.toml" ]]; then
     return
   fi
-  if [[ ! -f "${SCRIPT_DIR}/install.sh" ]] && [[ "$SCRIPT_DIR" == *"/tmp"* || "$SCRIPT_DIR" == "/dev/fd"* ]]; then
+  if [[ -z "$SCRIPT_DIR" ]]; then
     SCRIPT_DIR="$(pwd)"
     if [[ -f "${SCRIPT_DIR}/Cargo.toml" ]]; then
       return
     fi
+    SCRIPT_DIR=""
   fi
   if ! command -v git >/dev/null 2>&1; then
     red "Cannot find landingpig source. Install git and re-run, or clone the repo first:"
@@ -369,7 +382,7 @@ Options:
 
 Supports: Linux, macOS, Windows (Git Bash, MSYS2, Cygwin, WSL)
 
-Remote install (use bash, not sh):
+Remote install:
   curl -fsSL https://raw.githubusercontent.com/Mike4947/landingpig/main/install.sh | bash
 EOF
 }
