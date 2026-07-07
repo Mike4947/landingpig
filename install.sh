@@ -55,7 +55,11 @@ step() {
 
 press_enter() {
   printf '\nPress Enter to continue...'
-  read -r _
+  if [[ -r /dev/tty ]]; then
+    read -r _ </dev/tty
+  else
+    read -r _
+  fi
 }
 
 # ── Platform detection ────────────────────────────────────────────────────────
@@ -146,8 +150,17 @@ resolve_source_dir() {
   fi
   cyan "Fetching landingpig source from GitHub..."
   SOURCE_TMP="$(mktemp -d)"
-  git clone --depth 1 "$REPO_URL" "${SOURCE_TMP}/landingpig"
+  if ! git clone --depth 1 "$REPO_URL" "${SOURCE_TMP}/landingpig"; then
+    red "Failed to clone ${REPO_URL}"
+    exit 1
+  fi
   SCRIPT_DIR="${SOURCE_TMP}/landingpig"
+  if [[ ! -f "${SCRIPT_DIR}/Cargo.toml" ]]; then
+    red "The GitHub repo is missing the Rust source (Cargo.toml)."
+    yellow "Push the full landingpig project (src/, Cargo.toml, etc.) to ${REPO_URL}"
+    yellow "install.sh alone is not enough — the installer builds from the cloned repo."
+    exit 1
+  fi
 }
 
 cleanup_source_tmp() {
@@ -296,7 +309,6 @@ setup_path() {
 # ── Wizard ────────────────────────────────────────────────────────────────────
 
 welcome() {
-  clear 2>/dev/null || true
   bold "╔══════════════════════════════════════════════════════════╗"
   bold "║           landingpig installer wizard v${VERSION}           ║"
   bold "╚══════════════════════════════════════════════════════════╝"
@@ -314,7 +326,11 @@ choose_location() {
   bold "Install location"
   echo "Default (main drive): ${default}"
   printf 'Press Enter for default, or type a custom path: '
-  read -r custom
+  if [[ -r /dev/tty ]]; then
+    read -r custom </dev/tty
+  else
+    read -r custom
+  fi
   if [[ -n "${custom// }" ]]; then
     INSTALL_ROOT="${custom%/}"
   else
