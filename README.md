@@ -23,7 +23,7 @@ Credits: https://ascii.co.uk/art/pig
 > This repository serves as the official distribution channel and installer hub for landing pig CLI. The core application logic is distributed as a pre-compiled, optimized Rust binary. 
 
 # Installation
-- `curl -fsSL https://raw.githubusercontent.com/Mike4947/landingpig/main/install.sh | sh`
+- `curl -fsSL https://raw.githubusercontent.com/Mike4947/landingpig/main/install.sh | bash`
 - Custom location: ./install.sh --prefix /path/to/landingpig
 
 
