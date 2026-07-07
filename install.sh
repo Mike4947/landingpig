@@ -1,10 +1,24 @@
 #!/usr/bin/env bash
 # landingpig installer wizard — Linux, macOS, and Windows (Git Bash / MSYS2 / WSL)
+#
+# POSIX stub: Ubuntu/Debian `sh` is dash — re-fetch and run under bash when needed.
+INSTALLER_URL="${LANDINGPIG_INSTALLER_URL:-https://raw.githubusercontent.com/Mike4947/landingpig/main/install.sh}"
+if [ -z "${BASH_VERSION:-}" ]; then
+  if command -v bash >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
+    exec bash -c "$(curl -fsSL "$INSTALLER_URL")"
+  fi
+  echo "Error: bash is required. Use:" >&2
+  echo "  curl -fsSL $INSTALLER_URL | bash" >&2
+  exit 1
+fi
+
 set -euo pipefail
 
 VERSION="0.1.0"
+REPO_URL="https://github.com/Mike4947/landingpig.git"
 REQUIRED_KB=51200
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+SOURCE_TMP=""
 OS=""
 INSTALL_ROOT=""
 BIN_DIR=""
@@ -102,6 +116,33 @@ win_path() {
   fi
 }
 
+resolve_source_dir() {
+  if [[ -f "${SCRIPT_DIR}/Cargo.toml" ]]; then
+    return
+  fi
+  if [[ ! -f "${SCRIPT_DIR}/install.sh" ]] && [[ "$SCRIPT_DIR" == *"/tmp"* || "$SCRIPT_DIR" == "/dev/fd"* ]]; then
+    SCRIPT_DIR="$(pwd)"
+    if [[ -f "${SCRIPT_DIR}/Cargo.toml" ]]; then
+      return
+    fi
+  fi
+  if ! command -v git >/dev/null 2>&1; then
+    red "Cannot find landingpig source. Install git and re-run, or clone the repo first:"
+    cyan "  git clone ${REPO_URL} && cd landingpig && ./install.sh"
+    exit 1
+  fi
+  cyan "Fetching landingpig source from GitHub..."
+  SOURCE_TMP="$(mktemp -d)"
+  git clone --depth 1 "$REPO_URL" "${SOURCE_TMP}/landingpig"
+  SCRIPT_DIR="${SOURCE_TMP}/landingpig"
+}
+
+cleanup_source_tmp() {
+  if [[ -n "$SOURCE_TMP" && -d "$SOURCE_TMP" ]]; then
+    rm -rf "$SOURCE_TMP"
+  fi
+}
+
 # ── Disk space ────────────────────────────────────────────────────────────────
 
 available_kb() {
@@ -152,6 +193,8 @@ ensure_rust() {
 
 build_binary() {
   ensure_rust
+  resolve_source_dir
+  trap cleanup_source_tmp EXIT
   cyan "Building landingpig (release)..."
   (cd "$SCRIPT_DIR" && cargo build --release)
   local built="${SCRIPT_DIR}/target/release/${EXE_NAME}"
@@ -325,6 +368,9 @@ Options:
   -h, --help        Show this help
 
 Supports: Linux, macOS, Windows (Git Bash, MSYS2, Cygwin, WSL)
+
+Remote install (use bash, not sh):
+  curl -fsSL https://raw.githubusercontent.com/Mike4947/landingpig/main/install.sh | bash
 EOF
 }
 
