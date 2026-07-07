@@ -62,6 +62,25 @@ press_enter() {
   fi
 }
 
+progress_tty() {
+  if [[ -w /dev/tty ]]; then
+    printf '%s' "$*" >/dev/tty
+  else
+    printf '%s' "$*" >&2
+  fi
+}
+
+render_progress_bar() {
+  local pct="${1:-0}" label="${2:-Building}"
+  local width=36
+  local filled=$((pct * width / 100))
+  local empty=$((width - filled))
+  progress_tty "$(printf '\r\033[K[%s%s] %3d%% %s' \
+    "$(printf '%*s' "$filled" '' | tr ' ' '█')" \
+    "$(printf '%*s' "$empty" '' | tr ' ' '░')" \
+    "$pct" "$label")"
+}
+
 # ── Platform detection ────────────────────────────────────────────────────────
 
 detect_os() {
@@ -150,7 +169,7 @@ resolve_source_dir() {
   fi
   cyan "Fetching landingpig source from GitHub..."
   SOURCE_TMP="$(mktemp -d)"
-  if ! git clone --depth 1 "$REPO_URL" "${SOURCE_TMP}/landingpig"; then
+  if ! git clone --depth 1 -q "$REPO_URL" "${SOURCE_TMP}/landingpig"; then
     red "Failed to clone ${REPO_URL}"
     exit 1
   fi
@@ -217,12 +236,51 @@ ensure_rust() {
   exit 1
 }
 
+cargo_build_with_progress() {
+  local dir="$1"
+  local log pid status=0
+  log="$(mktemp)"
+
+  (cd "$dir" && cargo build --release >"$log" 2>&1) &
+  pid=$!
+
+  local compiled=0 estimate=32
+  while kill -0 "$pid" 2>/dev/null; do
+    local count
+    count="$(grep -c '^   Compiling ' "$log" 2>/dev/null || true)"
+    count="${count:-0}"
+    if [[ "$count" -gt "$compiled" ]]; then
+      compiled=$count
+      [[ "$compiled" -ge $((estimate * 8 / 10)) ]] && estimate=$((compiled + 10))
+    fi
+    local pct=0
+    if [[ "$estimate" -gt 0 ]]; then
+      pct=$((compiled * 100 / estimate))
+    fi
+    [[ "$pct" -gt 98 ]] && pct=98
+    render_progress_bar "$pct" "Compiling landingpig..."
+    sleep 0.12
+  done
+
+  wait "$pid" || status=$?
+  render_progress_bar 100 "Build complete"
+  progress_tty '\n'
+
+  if [[ "$status" -ne 0 ]]; then
+    red "Build failed."
+    tail -30 "$log" >&2
+    rm -f "$log"
+    exit 1
+  fi
+  rm -f "$log"
+}
+
 build_binary() {
   ensure_rust
   resolve_source_dir
   trap cleanup_source_tmp EXIT
   cyan "Building landingpig (release)..."
-  (cd "$SCRIPT_DIR" && cargo build --release)
+  cargo_build_with_progress "$SCRIPT_DIR"
   local built="${SCRIPT_DIR}/target/release/${EXE_NAME}"
   if [[ "$OS" == "windows" ]] && [[ ! -f "$built" ]]; then
     built="${SCRIPT_DIR}/target/release/${EXE_NAME}.exe"
@@ -250,6 +308,7 @@ install_files() {
 landingpig ${VERSION}
 Installed: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 Platform: ${OS}
+Install root: ${INSTALL_ROOT}
 Binary: ${BIN_DIR}/${EXE_NAME}
 Config: ~/.config/landingpig/config.json
 EOF
@@ -400,6 +459,9 @@ Supports: Linux, macOS, Windows (Git Bash, MSYS2, Cygwin, WSL)
 
 Remote install:
   curl -fsSL https://raw.githubusercontent.com/Mike4947/landingpig/main/install.sh | bash
+
+Uninstall:
+  curl -fsSL https://raw.githubusercontent.com/Mike4947/landingpig/main/uninstall.sh | bash
 EOF
 }
 
